@@ -1,0 +1,40 @@
+syntax = "proto3";
+package api;
+
+message AuthRequest {}
+
+message AuthReply {
+  // JWT that can be used with other CredStore RPCs.
+  string auth_jwt = 1;
+}
+
+message SigningKeyRequest {}
+
+message SigningKeyReply {
+  // DER-encoded public key used to sign JWTs on this server.
+  bytes signing_key = 1;
+}
+
+service CredStoreAuth {
+  // Auth takes in jwt.AppToken (bundled into the binary) and returns a jwt.AppToken,
+  // useable for other RPCs with credstore.
+  rpc Auth(AuthRequest) returns (AuthReply) {}
+
+  // Returns the currently used public key.
+  rpc SigningKey(SigningKeyRequest) returns (SigningKeyReply) {}
+}
+
+message GetTokenRequest {
+  // Target RPC endpoint.
+  string target = 1;
+}
+
+message GetTokenReply {
+  // JWT to use with target RPC.
+  string session_jwt = 1;
+}
+
+service CredStore {
+  // GetToken provides a JWT token for remote endpoint based on its DNS name.
+  rpc GetToken(GetTokenRequest) returns (GetTokenReply) {}
+}
