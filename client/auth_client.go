@@ -70,3 +70,16 @@ func GetAppToken() (string, error) {
 	}
 	return tok, nil
 }
+
+// GetTokenForRemote returns a JWT token for given remote.
+func GetTokenForRemote(ctx context.Context, conn *grpc.ClientConn, sessTok string, target string) (string, error) {
+	ctx = WithBearerToken(ctx, sessTok)
+
+	cli := pb.NewCredStoreClient(conn)
+	repl, err := cli.GetToken(ctx, &pb.GetTokenRequest{Target: target})
+	if err != nil {
+		return "", err
+	}
+
+	return repl.GetSessionJwt(), nil
+}
