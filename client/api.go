@@ -23,11 +23,13 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/google/go-microservice-helpers/client"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	pb "github.com/google/credstore/api"
-	"golang.org/x/net/context"
 )
 
 // GetSigningKey requests the current signing key from CredStore.
@@ -82,4 +84,52 @@ func GetTokenForRemote(ctx context.Context, conn *grpc.ClientConn, sessTok strin
 	}
 
 	return repl.GetSessionJwt(), nil
+}
+
+type CredstoreClient struct {
+	conn       *grpc.ClientConn
+	appTok     string
+	sessTok    string
+	signingKey crypto.PublicKey
+}
+
+// NewCredstoreClient creates a new CredstoreClient.
+func NewCredstoreClient(ctx context.Context, credStoreAddress string, credStoreCA string) (*CredstoreClient, error) {
+	appTok, err := GetAppToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get app token: %v", err)
+	}
+
+	conn, err := clienthelpers.NewGRPCConn(credStoreAddress, credStoreCA, "", "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create connection to credstore: %v", err)
+	}
+
+	credStoreSessionTok, err := GetAuthToken(ctx, conn, appTok)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session token: %v", err)
+	}
+
+	credStoreKey, err := GetSigningKey(ctx, conn, appTok)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get signing key: %v", err)
+	}
+
+	return &CredstoreClient{
+		conn:       conn,
+		appTok:     appTok,
+		sessTok:    credStoreSessionTok,
+		signingKey: credStoreKey,
+	}, nil
+}
+
+// SigningKey returns credstore public key for JWT verification.
+func (c CredstoreClient) SigningKey() crypto.PublicKey {
+	return c.signingKey
+}
+
+// GetTokenForRemote returns a token for given remote host:port.
+func (c CredstoreClient) GetTokenForRemote(ctx context.Context, remoteHostPort string) (string, error) {
+	dnsname := strings.Split(remoteHostPort, ":")[0]
+	return GetTokenForRemote(ctx, c.conn, c.sessTok, dnsname)
 }
