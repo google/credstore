@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/golang/glog"
 	pb "github.com/google/credstore/api"
 	"github.com/google/credstore/client"
 	"github.com/google/credstore/config"
@@ -64,29 +65,35 @@ func (s CredStoreServer) GetToken(ctx context.Context, req *pb.GetTokenRequest) 
 	client := tok.Client
 
 	if !s.config.FindClient(client) {
+		glog.Errorf("client %s is not authorized to access this server", client)
 		return nil, grpc.Errorf(codes.PermissionDenied, "client %s is not authorized to access this server", client)
 	}
 
 	scopeName := s.config.FindAuthorization(client, req.GetTarget())
 	if scopeName == "" {
+		glog.Errorf("client %s doesn't have a scope for %s", client, req.GetTarget())
 		return nil, grpc.Errorf(codes.PermissionDenied, "client %s doesn't have a scope for %s", client, req.GetTarget())
 	}
 
 	scope := s.config.FindScope(scopeName)
 	if scope == nil {
+		glog.Errorf("client %s requested scope %s for %s, but no such scope is available", client, scopeName, req.GetTarget())
 		return nil, grpc.Errorf(codes.Internal, "client %s requested scope %s for %s, but no such scope is available", client, scopeName, req.GetTarget())
 	}
 
 	rpcToken, err := jwt.BuildRPCToken(client, scope.Service, scope.Method)
 	if err != nil {
+		glog.Errorf("failed to serialize JWT token: %v", err)
 		return nil, grpc.Errorf(codes.Internal, "failed to serialize JWT token: %v", err)
 	}
 	object, err := s.signer.Sign(rpcToken)
 	if err != nil {
+		glog.Errorf("failed to sign JWT payload: %v", err)
 		return nil, grpc.Errorf(codes.Internal, "failed to sign JWT payload: %v", err)
 	}
 	serialized, err := object.CompactSerialize()
 	if err != nil {
+		glog.Errorf("failed to serialize short-form token: %v", err)
 		return nil, grpc.Errorf(codes.Internal, "failed to serialize short-form token: %v", err)
 	}
 
@@ -107,10 +114,12 @@ func CredStoreServerInterceptor() grpc.UnaryServerInterceptor {
 		var jwtTok jwt.AuthToken
 		err := json.Unmarshal(jwtTokString, &jwtTok)
 		if err != nil {
+			glog.Errorf("cannot deserialize JWT token: %v", err)
 			return nil, grpc.Errorf(codes.Unauthenticated, "cannot deserialize JWT token: %v", err)
 		}
 
 		if err := jwtTok.Verify(); err != nil {
+			glog.Errorf("cannot verify JWT token: %v", err)
 			return nil, grpc.Errorf(codes.Unauthenticated, "cannot verify JWT token: %v", err)
 		}
 

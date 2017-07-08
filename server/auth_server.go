@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/golang/glog"
 	pb "github.com/google/credstore/api"
 	"github.com/google/credstore/client"
 	"github.com/google/credstore/config"
@@ -66,20 +67,24 @@ func (s AuthServer) Auth(ctx context.Context, req *pb.AuthRequest) (*pb.AuthRepl
 	client := tok.Client
 
 	if !s.config.FindClient(client) {
+		glog.Errorf("client %s is not authorized to access this server", client)
 		return nil, grpc.Errorf(codes.PermissionDenied, "client %s is not authorized to access this server", client)
 	}
 
 	authToken, err := jwt.BuildAuthToken(client)
 	if err != nil {
+		glog.Errorf("failed to serialize JWT token: %v", err)
 		return nil, grpc.Errorf(codes.Internal, "failed to serialize JWT token: %v", err)
 	}
 	object, err := s.signer.Sign(authToken)
 	if err != nil {
+		glog.Errorf("failed to sign JWT payload: %v", err)
 		return nil, grpc.Errorf(codes.Internal, "failed to sign JWT payload: %v", err)
 	}
 
 	serialized, err := object.CompactSerialize()
 	if err != nil {
+		glog.Errorf("failed to serialize short-form token: %v", err)
 		return nil, grpc.Errorf(codes.Internal, "failed to serialize short-form token: %v", err)
 	}
 
@@ -92,6 +97,7 @@ func (s AuthServer) Auth(ctx context.Context, req *pb.AuthRequest) (*pb.AuthRepl
 func (s AuthServer) SigningKey(context.Context, *pb.SigningKeyRequest) (*pb.SigningKeyReply, error) {
 	pubkeyBytes, err := x509.MarshalPKIXPublicKey(s.signingKey.Public())
 	if err != nil {
+		glog.Errorf("failed to marshal ec public key: %v", err)
 		return nil, grpc.Errorf(codes.Internal, "failed to marshal ec public key: %v", err)
 	}
 
@@ -114,10 +120,12 @@ func AuthServerInterceptor() grpc.UnaryServerInterceptor {
 		var jwtTok jwt.AppToken
 		err := json.Unmarshal(jwtTokString, &jwtTok)
 		if err != nil {
+			glog.Errorf("cannot deserialize JWT token: %v", err)
 			return nil, grpc.Errorf(codes.Unauthenticated, "cannot deserialize JWT token: %v", err)
 		}
 
 		if err := jwtTok.Verify(); err != nil {
+			glog.Errorf("cannot verify JWT token: %v", err)
 			return nil, grpc.Errorf(codes.Unauthenticated, "cannot verify JWT token: %v", err)
 		}
 
