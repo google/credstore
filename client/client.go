@@ -25,7 +25,7 @@ import (
 
 // WithBearerToken adds bearer token to the context.
 func WithBearerToken(ctx context.Context, token string) context.Context {
-	md, ok := metadata.FromContext(ctx)
+	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		md = metadata.New(nil)
 	} else {
@@ -34,7 +34,7 @@ func WithBearerToken(ctx context.Context, token string) context.Context {
 
 	md["authorization"] = []string{"bearer " + token}
 
-	ctx = metadata.NewContext(ctx, md)
+	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	return ctx
 }
