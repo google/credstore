@@ -46,7 +46,7 @@ func CredStoreTokenInterceptor(publicKey crypto.PublicKey) grpc.UnaryServerInter
 		var newCtx context.Context
 		var err error
 
-		md, ok := metadata.FromContext(ctx)
+		md, ok := metadata.FromIncomingContext(ctx)
 		if ok == false {
 			return nil, grpc.Errorf(codes.Unauthenticated, "cannot read metadata for request")
 		}
